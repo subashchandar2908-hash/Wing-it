@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wing It Habit Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f4f4f4;
+            transition: 0.3s;
+            margin: 0;
+            padding: 0;
+        }
+
+        .dark {
+            background: #222;
+            color: white;
+        }
+
+        .container {
+            width: 420px;
+            max-width: 92%;
+            margin: 40px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 0 10px gray;
+        }
+
+        .dark .container {
+            background: #333;
+            color: white;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            padding: 8px;
+            border-bottom: 1px solid #ccc;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 3px 0;
+        }
+
+        textarea {
+            width: 100%;
+            height: 180px;
+            margin-top: 10px;
+            resize: none;
+        }
+
+        .selected {
+            background: #ddd;
+            font-weight: bold;
+        }
+
+        .done {
+            background: green !important;
+            color: white;
+            font-weight: bold;
+        }
+
+        .notdone {
+            background: red !important;
+            color: white;
+            font-weight: bold;
+        }
+
+        a {
+            color: blue;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .dark a {
+            color: lightblue;
+        }
+
+        #registerSection, #habitSection {
+            display: none;
+        }
+
+        .report-box {
+            text-align: left;
+            margin-top: 15px;
+        }
+
+        .report-box h3 {
+            margin-bottom: 8px;
+        }
+
+        .small-area {
+            height: 140px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="loginSection">
+        <h2>Wing It Habit Tracker</h2>
+        <h3>Login</h3>
+        <input id="loginUser" placeholder="Username"><br>
+        <input type="password" id="loginPass" placeholder="Password"><br>
+        <button onclick="login()">Login</button>
+        <p id="loginMsg"></p>
+        <p>New user? <a onclick="showRegister()">Register</a></p>
+    </div>
+
+    <div class="container" id="registerSection">
+        <h2>Wing It Habit Tracker</h2>
+        <h3>Register</h3>
+        <input id="regUser" placeholder="Username"><br>
+        <input type="password" id="regPass" placeholder="Password"><br>
+        <button onclick="register()">Register</button>
+        <p id="regMsg"></p>
+        <p>Already have an account? <a onclick="showLogin()">Login</a></p>
+    </div>
+
+    <div class="container" id="habitSection">
+        <h2>Wing It Habit Tracker</h2>
+
+        <button onclick="toggleDark()">🌙 Dark Mode</button>
+        <button onclick="logout()">Logout</button>
+        <br>
+
+        <input id="habitInput" placeholder="Enter New Habit">
+        <button onclick="addHabit()">Add</button>
+
+        <ul id="habitList"></ul>
+
+        <button onclick="markDone()">Done</button>
+        <button onclick="markNotDone()">Not Done</button>
+        <button onclick="deleteHabit()">Delete</button>
+        <br>
+
+        <button onclick="completeDay()">Complete Day</button>
+
+        <h3>Progress: <span id="progress">0%</span></h3>
+        <h3>🔥 Streak: <span id="streak">0</span></h3>
+        <h3>🏆 Badge: <span id="badge">Beginner</span></h3>
+
+        <button onclick="exportData()">Export</button>
+        <button onclick="resetData()">Reset</button>
+
+        <div class="report-box">
+            <h3>Daily Summary</h3>
+            <textarea id="summary" readonly></textarea>
+        </div>
+
+        <div class="report-box">
+            <h3>Weekly Report</h3>
+            <textarea id="weeklyReport" class="small-area" readonly></textarea>
+        </div>
+
+        <div class="report-box">
+            <h3>Monthly Report</h3>
+            <textarea id="monthlyReport" class="small-area" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = "";
+        let selectedHabit = null;
+        let selectedElement = null;
+        let todayStatus = {};
+
+        function getDB() {
+            return JSON.parse(localStorage.getItem("habitDB")) || { users: {} };
+        }
+
+        function saveDB(db) {
+            localStorage.setItem("habitDB", JSON.stringify(db));
+        }
+
+        function showRegister() {
+            document.getElementById("loginSection").style.display = "none";
+            document.getElementById("registerSection").style.display = "block";
+        }
+
+        function showLogin() {
+            document.getElementById("registerSection").style.display = "none";
+            document.getElementById("loginSection").style.display = "block";
+        }
+
+        function register() {
+            let db = getDB();
+            let username = document.getElementById("regUser").value.trim();
+            let password = document.getElementById("regPass").value.trim();
+            let msg = document.getElementById("regMsg");
+
+            if (!username || !password) {
+                msg.textContent = "Please fill all fields";
+                msg.style.color = "red";
+                return;
+            }
+
+            if (db.users[username]) {
+                msg.textContent = "User already exists";
+                msg.style.color = "red";
+                return;
+            }
+
+            db.users[username] = {
+                password: password,
+                habits: [],
+                records: [],
+                streak: 0
+            };
+
+            saveDB(db);
+            msg.textContent = "Registration successful";
+            msg.style.color = "green";
+        }
+
+        function login() {
+            let db = getDB();
+            let username = document.getElementById("loginUser").value.trim();
+            let password = document.getElementById("loginPass").value.trim();
+            let msg = document.getElementById("loginMsg");
+
+            if (db.users[username] && db.users[username].password === password) {
+                currentUser = username;
+                msg.textContent = "";
+                document.getElementById("loginSection").style.display = "none";
+                document.getElementById("registerSection").style.display = "none";
+                document.getElementById("habitSection").style.display = "block";
+                todayStatus = {};
+                selectedHabit = null;
+                selectedElement = null;
+                loadData();
+            } else {
+                msg.textContent = "Invalid username or password";
+                msg.style.color = "red";
+            }
+        }
+
+        function logout() {
+            currentUser = "";
+            selectedHabit = null;
+            selectedElement = null;
+            todayStatus = {};
+            document.getElementById("habitSection").style.display = "none";
+            document.getElementById("loginSection").style.display = "block";
+        }
+
+        function addHabit() {
+            let db = getDB();
+            let habit = document.getElementById("habitInput").value.trim();
+
+            if (!habit) return;
+
+            let user = db.users[currentUser];
+
+            if (user.habits.includes(habit)) {
+                alert("Habit already exists");
+                return;
+            }
+
+            user.habits.push(habit);
+            saveDB(db);
+            document.getElementById("habitInput").value = "";
+            loadData();
+        }
+
+        function deleteHabit() {
+            if (!selectedHabit) {
+                alert("Select a habit");
+                return;
+            }
+
+            let db = getDB();
+            let user = db.users[currentUser];
+
+            user.habits = user.habits.filter(h => h !== selectedHabit);
+
+            user.records.forEach(day => {
+                delete day.data[selectedHabit];
+            });
+
+            saveDB(db);
+            selectedHabit = null;
+            selectedElement = null;
+            loadData();
+        }
+
+        function getTodayDate() {
+            let d = new Date();
+            return d.toISOString().split("T")[0];
+        }
+
+        function formatDisplayDate(dateString) {
+            let d = new Date(dateString);
+            return d.toLocaleDateString();
+        }
+
+        function getWeekNumber(date) {
+            const tempDate = new Date(date.getTime());
+            tempDate.setHours(0, 0, 0, 0);
+            tempDate.setDate(tempDate.getDate() + 3 - ((tempDate.getDay() + 6) % 7));
+            const week1 = new Date(tempDate.getFullYear(), 0, 4);
+            return 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000
+                - 3 + ((week1.getDay() + 6) % 7)) / 7);
+        }
+
+        function generateWeeklyReport(records) {
+            let weeklyBox = document.getElementById("weeklyReport");
+            weeklyBox.value = "";
+
+            if (records.length === 0) {
+                weeklyBox.value = "No weekly data available.";
+                return;
+            }
+
+            let weeklyData = {};
+
+            records.forEach(record => {
+                let date = new Date(record.rawDate || record.date);
+                let year = date.getFullYear();
+                let week = getWeekNumber(date);
+                let key = year + "-W" + week;
+
+                if (!weeklyData[key]) {
+                    weeklyData[key] = { total: 0, done: 0 };
+                }
+
+                for (let habit in record.data) {
+                    weeklyData[key].total++;
+                    if (record.data[habit] === 1) {
+                        weeklyData[key].done++;
+                    }
+                }
+            });
+
+            for (let key in weeklyData) {
+                let total = weeklyData[key].total;
+                let done = weeklyData[key].done;
+                let percent = total ? ((done / total) * 100).toFixed(2) : 0;
+                weeklyBox.value += key + " → " + done + "/" + total + " completed (" + percent + "%)\n";
+            }
+        }
+
+        function generateMonthlyReport(records) {
+            let monthlyBox = document.getElementById("monthlyReport");
+            monthlyBox.value = "";
+
+            if (records.length === 0) {
+                monthlyBox.value = "No monthly data available.";
+                return;
+            }
+
+            let monthlyData = {};
+
+            records.forEach(record => {
+                let date = new Date(record.rawDate || record.date);
+                let key = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
+
+                if (!monthlyData[key]) {
+                    monthlyData[key] = { total: 0, done: 0 };
+                }
+
+                for (let habit in record.data) {
+                    monthlyData[key].total++;
+                    if (record.data[habit] === 1) {
+                        monthlyData[key].done++;
+                    }
+                }
+            });
+
+            for (let key in monthlyData) {
+                let total = monthlyData[key].total;
+                let done = monthlyData[key].done;
+                let percent = total ? ((done / total) * 100).toFixed(2) : 0;
+                monthlyBox.value += key + " → " + done + "/" + total + " completed (" + percent + "%)\n";
+            }
+        }
+
+        function loadData() {
+            let db = getDB();
+            let user = db.users[currentUser];
+            let habitList = document.getElementById("habitList");
+            let summary = document.getElementById("summary");
+
+            habitList.innerHTML = "";
+            summary.value = "";
+
+            user.habits.forEach(habit => {
+                let li = document.createElement("li");
+                li.textContent = habit;
+
+                if (todayStatus[habit] === 1) li.classList.add("done");
+                if (todayStatus[habit] === 0) li.classList.add("notdone");
+
+                li.onclick = function () {
+                    selectedHabit = habit;
+                    selectedElement = li;
+
+                    document.querySelectorAll("#habitList li").forEach(el => {
+                        el.classList.remove("selected");
+                    });
+
+                    li.classList.add("selected");
+                };
+
+                habitList.appendChild(li);
+            });
+
+            let total = 0;
+            let totalDone = 0;
+
+            user.records.forEach((day, index) => {
+                summary.value += "Day " + (index + 1) + " (" + day.date + ")\n";
+
+                for (let habit in day.data) {
+                    total++;
+                    if (day.data[habit] === 1) {
+                        totalDone++;
+                        summary.value += habit + " → Done\n";
+                    } else {
+                        summary.value += habit + " → Not Done\n";
+                    }
+                }
+
+                summary.value += "----------------------\n";
+            });
+
+            let percent = total ? ((totalDone / total) * 100).toFixed(1) : 0;
+            document.getElementById("progress").textContent = percent + "%";
+            document.getElementById("streak").textContent = user.streak;
+
+            if (user.streak >= 10) {
+                document.getElementById("badge").textContent = "🔥 Master";
+            } else if (user.streak >= 5) {
+                document.getElementById("badge").textContent = "⭐ Rising";
+            } else {
+                document.getElementById("badge").textContent = "Beginner";
+            }
+
+            generateWeeklyReport(user.records);
+            generateMonthlyReport(user.records);
+        }
+
+        function markDone() {
+            if (!selectedHabit) {
+                alert("Select a habit");
+                return;
+            }
+
+            todayStatus[selectedHabit] = 1;
+
+            if (selectedElement) {
+                selectedElement.classList.remove("notdone");
+                selectedElement.classList.add("done");
+            }
+        }
+
+        function markNotDone() {
+            if (!selectedHabit) {
+                alert("Select a habit");
+                return;
+            }
+
+            todayStatus[selectedHabit] = 0;
+
+            if (selectedElement) {
+                selectedElement.classList.remove("done");
+                selectedElement.classList.add("notdone");
+            }
+        }
+
+        function completeDay() {
+            let db = getDB();
+            let user = db.users[currentUser];
+
+            if (user.habits.length === 0) {
+                alert("Add at least one habit");
+                return;
+            }
+
+            let allDone = true;
+
+            user.habits.forEach(habit => {
+                if (!(habit in todayStatus)) {
+                    todayStatus[habit] = 0;
+                }
+                if (todayStatus[habit] !== 1) {
+                    allDone = false;
+                }
+            });
+
+            user.records.push({
+                rawDate: getTodayDate(),
+                date: formatDisplayDate(getTodayDate()),
+                data: { ...todayStatus }
+            });
+
+            if (allDone) {
+                user.streak += 1;
+            } else {
+                user.streak = 0;
+            }
+
+            todayStatus = {};
+            saveDB(db);
+            loadData();
+            alert("Day Completed Successfully");
+        }
+
+        function toggleDark() {
+            document.body.classList.toggle("dark");
+        }
+
+        function exportData() {
+            let db = getDB();
+            let userData = db.users[currentUser];
+            let dataStr = JSON.stringify(userData, null, 2);
+            alert(dataStr);
+        }
+
+        function resetData() {
+            let confirmReset = confirm("Do you want to reset all data?");
+            if (!confirmReset) return;
+
+            localStorage.removeItem("habitDB");
+            location.reload();
+        }
+    </script>
+</body>
+</html>
